@@ -1,0 +1,119 @@
+sqoop eval \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--query "desc retail_db.products"
+
+
+### Zadanie 1
+
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--query "SELECT products.product_id, products.product_name, products.product_description, products.product_price, categories.category_name FROM products JOIN categories on products.product_category_id=categories.category_id WHERE categories.category_name = 'Basketball' AND \$CONDITIONS" \
+--target-dir /user/cloudera/mysql/basketball \
+--fields-terminated-by "\t"  \
+--split-by products.product_id \
+--num-mappers 1
+
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--query "SELECT products.product_id, products.product_name, products.product_description, products.product_price, categories.category_name FROM products JOIN categories on products.product_category_id=categories.category_id WHERE categories.category_name = 'Hockey' AND \$CONDITIONS" \
+--target-dir /user/cloudera/mysql/hockey \
+--fields-terminated-by "\t"  \
+--split-by products.product_id \
+--num-mappers 1
+
+CREATE EXTERNAL TABLE products_by_category (
+ id STRING,
+ product_name STRING,
+ product_description STRING,
+ product_price STRING)
+partitioned BY (category_name STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+
+alter table products_by_category add partition (category_name='Hockey') location '/user/cloudera/mysql/hockey';
+alter table products_by_category add partition (category_name='Basketball') location '/user/cloudera/mysql/basketball';
+
+### Zadanie 2
+
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--query "SELECT products.product_id, products.product_name, products.product_description, products.product_price, categories.category_name FROM products JOIN categories on products.product_category_id=categories.category_id WHERE categories.category_name = 'Hockey' AND \$CONDITIONS" \
+--target-dir /user/cloudera/mysql/products_categories \
+--fields-terminated-by "\t"  \
+--split-by products.product_id \
+--num-mappers 1 \
+--hive-import \
+--hive-table product_categories
+
+CREATE TABLE products_categories_second (
+product_id STRING,
+product_name STRING,
+product_description STRING,
+product_price STRING
+)
+PARTITIONED BY (category_name STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+
+insert overwrite table products_categories_second
+partition (category_name)
+select product_id, product_name, product_description, product_price from
+products_categories
+
+### Zadanie 3
+
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table products \
+--target-dir /user/cloudera/mysql/products_parquet \
+--compression-codec org.apache.hadoop.io.compress.SnappyCodec \
+--fields-terminated-by "|" \
+--hive-import \
+--hive-table products_parquet \
+--as-parquetfile
+
+### Zadanie 4
+
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table products \
+--target-dir /user/cloudera/mysql/products_avro \
+--fields-terminated-by "\001" \
+--as-avrodatafile
+
+hadoop fs -mkdir /user/cloudera/mysql/products_avro_meta/
+hadoop fs -put products.avsc /user/cloudera/mysql/products_avro_meta/
+
+CREATE EXTERNAL TABLE products_avro
+STORED AS AVRO
+LOCATION '/user/cloudera/mysql/products_avro'
+TBLPROPERTIES ('avro.schema.url'=
+'hdfs:/user/cloudera/mysql/products_avro_meta/products.avsc');
+
+### Zadanie 5
+
+CREATE TABLE products_categories_second (
+product_id STRING,
+product_name STRING,
+product_description STRING,
+product_price STRING
+)
+PARTITIONED BY (category_name STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.avro.AvroSerDe’
+STORED as
+INPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat'
+OUTPUTFORMAT 'org.apache.hadoop.hive.ql.io.avro.AvroContainerOutputFormat’
+TBLPROPERTIES('avro.schema.url'='hdfs://cloudera.loc/user/.../schema.avsc');
+
+insert overwrite table products_categories_second
+select product_id, product_name, product_description, product_price from
+products_categories
+limit 100

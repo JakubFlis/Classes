@@ -1,0 +1,68 @@
+# Zadanie 1
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table customers \
+--target-dir /user/kainos/customers_single \
+--num-mappers 1
+
+# Zadanie 2
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table customers \
+--target-dir /user/kainos/customers_tab \
+--fields-terminated-by "\t"
+
+# Zadanie 3
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table customers \
+--target-dir /user/kainos/customers_limit \
+--columns "customer_id,customer_fname,customer_email,customer_state" \
+--where "customer_state='TX'"
+
+# Zadanie 4
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table customers \
+--target-dir /user/kainos/customers_compress \
+--fields-terminated-by "\t" \
+--num-mappers 1 \
+--compression-codec org.apache.hadoop.io.compress.SnappyCodec
+
+# Zadanie 5
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--table customers \
+--target-dir /user/kainos/customers_append \
+--fields-terminated-by "\t" \
+--incremental append \
+--check-column customer_id \
+--last-value 3100
+
+# Struktura
+sqoop eval \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--query "desc retail_db.departments"
+
+# Zadanie 6
+1. join kategorie produkty dep.
+2. grupowanie po dep.
+3. gzip
+4. wyśw. depart. name, category name, product name, product price, product desc. 
+
+sqoop import \
+--connect "jdbc:mysql://quickstart.cloudera:3306/retail_db" \
+--username retail_dba --password cloudera \
+--target-dir /user/kainos/lab2_join \
+--query "SELECT departments.department_id, departments.department_name, categories.category_name, products.product_name, products.product_description, products.product_price FROM departments JOIN categories ON departments.department_id=categories.category_department_id JOIN products ON categories.category_id = products.product_category_id WHERE \$CONDITIONS" \
+--split-by departments.department_id \
+--compress \
+--fields-terminated-by "\t" \
+--null-non-string 'None' \
+--num-mappers 1
